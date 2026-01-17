@@ -1,134 +1,115 @@
-//v1.0.4
 import { app } from "../../scripts/app.js";
 
-const config = {
-    newTab: true,
-};
-
-// Store references to created elements for cleanup
-let widgetElements = [];
-let observers = [];
-
-const createWidget = ({ className, text, tooltip, includeIcon, labelIcon }) => {
-    const button = document.createElement('button');
-    button.className = className;
-    button.setAttribute('aria-label', tooltip);
-    button.title = tooltip;
-
-    if (includeIcon && labelIcon) {
-        const iconContainer = document.createElement('span');
-        iconContainer.innerHTML = labelIcon;
-        iconContainer.style.display = 'flex';
-        iconContainer.style.alignItems = 'center';
-        iconContainer.style.justifyContent = 'center';
-        iconContainer.style.width = '20px';
-        iconContainer.style.height = '16px';
-        button.appendChild(iconContainer);
-    }
-
-    const textNode = document.createTextNode(text);
-    button.appendChild(textNode);
-
-    button.addEventListener('click', onClick);
-    widgetElements.push(button); // Store reference for cleanup
-    return button;
-};
-
-const onClick = () => {
-    const imgExtractUrl = `${window.location.origin}/imgextract`;
-    if (config.newTab) {
-        window.open(imgExtractUrl, '_blank');
-    } else {
-        window.location.href = imgExtractUrl;
-    }
-};
-
-const addWidgetMenuRight = (menuRight) => {
-    let buttonGroup = menuRight.querySelector('.comfyui-button-group');
-
-    if (!buttonGroup) {
-        buttonGroup = document.createElement('div');
-        buttonGroup.className = 'comfyui-button-group';
-        menuRight.appendChild(buttonGroup);
-    }
-
-    const imageinfoButton = createWidget({
-        className: 'comfyui-button comfyui-menu-mobile-collapse primary',
-        text: '',
-        tooltip: 'Launch Metadata Extractor',
-        includeIcon: true,
-        labelIcon: getExtractorIcon(),
-    });
-
-    buttonGroup.appendChild(imageinfoButton);
-};
-
-const addWidgetMenu = (menu) => {
-    const resetViewButton = menu.querySelector('#comfy-reset-view-button');
-    if (!resetViewButton) {
-        return;
-    }
-
-    const imageinfoButton = createWidget({
-        className: 'comfy-imginfo-button',
-        text: 'Image Info',
-        tooltip: 'Launch Metadata Extractor',
-        includeIcon: false,
-    });
-
-    resetViewButton.insertAdjacentElement('afterend', imageinfoButton);
-};
-
-const addWidget = (selector, callback) => {
-    const observer = new MutationObserver((mutations, obs) => {
-        const element = document.querySelector(selector);
-        if (element) {
-            callback(element);
-            obs.disconnect();
-        }
-    });
-
-    observers.push(observer); // Store reference for cleanup
-    observer.observe(document.body, { childList: true, subtree: true });
-};
-
-const initializeWidget = () => {
-    addWidget('.comfyui-menu-right', addWidgetMenuRight);
-    addWidget('.comfy-menu', addWidgetMenu);
-};
-
-const getExtractorIcon = () => {
-    return `✨`;
-};
-
-const cleanupWidgets = () => {
-    // Remove all created buttons
-    widgetElements.forEach(element => {
-        if (element && element.parentNode) {
-            element.parentNode.removeChild(element);
-        }
-    });
-    widgetElements = [];
+app.registerExtension({
+    name: "otacoo.imgextract.popout_v2",
     
-    // Disconnect all observers
-    observers.forEach(observer => observer.disconnect());
-    observers = [];
-};
+    async setup() {
+        const btnId = "otacoo-extractor-btn";
+        if (document.getElementById(btnId)) return;
 
-app.registerExtension({ 
-    name: "otacoo-imgextract.widget",
-    
-    // Called when the extension is enabled or disabled
-    setup(enabled) {
-        if (enabled) {
-            initializeWidget();
-        } else {
-            cleanupWidgets();
-        }
-    },
-    
-    // This is needed to ensure the extension can be toggled on/off
-    beforeRegisterNodeDef(nodeType, nodeData, app) {
-        return { nodeType, nodeData };
+        // --- 1. La fonction d'ouverture "Pop-out" ---
+        const openNativeWindow = () => {
+            // NOUVELLES DIMENSIONS (Grand Format)
+            // On vise large pour que les 3 colonnes rentrent sans scroll
+            const w = 1280; 
+            const h = 900;
+            
+            // Calcul pour centrer parfaitement sur l'écran
+            const left = (window.screen.width / 2) - (w / 2);
+            const top = (window.screen.height / 2) - (h / 2);
+
+            // Configuration de la fenêtre
+            const features = [
+                `width=${w}`,
+                `height=${h}`,
+                `top=${top}`,
+                `left=${left}`,
+                'resizable=yes', // Tu pourras toujours redimensionner
+                'scrollbars=yes',
+                'status=no',
+                'menubar=no',
+                'toolbar=no',
+                'location=no'
+            ].join(',');
+
+            // Nom unique 'OtacooWindow' pour éviter d'ouvrir 50 fenêtres
+            const win = window.open('/imgextract', 'OtacooWindow', features);
+
+            if (win) {
+                win.focus();
+            }
+        };
+
+        // --- 2. Création du bouton ---
+        const btn = document.createElement("button");
+        btn.id = btnId;
+        btn.textContent = "✨ Extractor";
+        btn.title = "Ouvrir l'extracteur dans une fenêtre indépendante";
+        
+        Object.assign(btn.style, {
+            backgroundColor: "#2e303d",
+            color: "#ececec",
+            border: "1px solid #6b6e7f",
+            borderRadius: "4px",
+            padding: "0 16px",
+            fontSize: "13px",
+            fontWeight: "600",
+            cursor: "pointer",
+            height: "auto",
+            minHeight: "100%",
+            alignSelf: "stretch",
+            display: "inline-flex",
+            alignItems: "center",
+            justifyContent: "center",
+            margin: "0 4px",
+            whiteSpace: "nowrap",
+            transition: "all 0.2s",
+            zIndex: "1000"
+        });
+
+        // Effets visuels
+        btn.onmouseenter = () => { btn.style.backgroundColor = "#464a5c"; };
+        btn.onmouseleave = () => { btn.style.backgroundColor = "#2e303d"; };
+        
+        // Action
+        btn.onclick = openNativeWindow;
+
+        // --- 3. Injection Intelligente ---
+        const injectButton = () => {
+            const v1ButtonGroup = document.querySelector(".comfyui-button-group");
+            const managerBtn = document.querySelector(".comfyui-menu-mobile-collapse");
+            const classicMenu = document.querySelector(".comfy-menu");
+
+            if (v1ButtonGroup) {
+                v1ButtonGroup.prepend(btn);
+                v1ButtonGroup.style.alignItems = "stretch"; 
+                return true;
+            } 
+            else if (managerBtn && managerBtn.parentNode) {
+                managerBtn.parentNode.insertBefore(btn, managerBtn);
+                return true;
+            }
+            else if (classicMenu) {
+                classicMenu.appendChild(btn);
+                Object.assign(btn.style, { display: "block", width: "100%", margin: "5px 0", height: "30px" });
+                return true;
+            }
+            return false;
+        };
+
+        let attempts = 0;
+        const tryInject = setInterval(() => {
+            attempts++;
+            if (injectButton() || attempts > 15) {
+                clearInterval(tryInject);
+                if (attempts > 15 && !document.getElementById(btnId)) {
+                    Object.assign(btn.style, {
+                        position: "fixed", bottom: "10px", left: "10px", 
+                        height: "32px", alignSelf: "auto"
+                    });
+                    document.body.appendChild(btn);
+                }
+            }
+        }, 500);
     }
 });
